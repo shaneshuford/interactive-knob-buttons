@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Knob Control</title>
+    <style>
+        :root {
+            --knob-size: 150px;
+            --center-button-size: 50px;
+            --indicator-height: calc(var(--knob-size) * 0.4);
+            --indicator-width: 4px;
+            --knob-bg-start: #555;
+            --knob-bg-end: #222;
+            --knob-shadow: #111;
+            --center-bg: #777;
+            --center-active-bg: #999;
+            --indicator-color: #00aaff;
+            --glow-color: rgba(0, 170, 255, 0.7);
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+            flex-direction: column;
+            gap: 20px;
+            touch-action: none; /* Prevent page scroll while interacting */
+            -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
+        }
+
+        .knob-control-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            user-select: none; /* Prevent text selection during drag */
+            -webkit-user-select: none;
+            width: var(--knob-size);
+        }
+
+        .knob {
+            width: var(--knob-size);
+            height: var(--knob-size);
+            border-radius: 50%;
+            background: radial-gradient(ellipse at center, var(--knob-bg-start) 0%, var(--knob-bg-end) 100%);
+            box-shadow:
+                inset 0 2px 5px rgba(255, 255, 255, 0.1),
+                0 5px 15px rgba(0, 0, 0, 0.5),
+                0 0 0 2px var(--knob-shadow);
+            position: relative;
+            cursor: grab;
+            transition: transform 0.1s ease-out, box-shadow 0.2s ease;
+        }
+
+        .knob:active {
+            cursor: grabbing;
+            transform: scale(1.05); /* Slightly larger when active */
+            box-shadow:
+                inset 0 2px 5px rgba(255, 255, 255, 0.1),
+                0 8px 20px rgba(0, 0, 0, 0.6),
+                0 0 0 3px var(--knob-shadow),
+                0 0 15px var(--glow-color); /* Glow effect when active */
+        }
+
+        .knob-indicator {
+            width: var(--indicator-width);
+            height: var(--indicator-height);
+            background-color: var(--indicator-color);
+            border-radius: calc(var(--indicator-width) / 2);
+            position: absolute;
+            top: 5%; /* Start slightly inset from the top edge */
+            left: 50%;
+            transform-origin: center calc(var(--knob-size) / 2 - 5%); /* Rotate around knob center */
+            transform: translateX(-50%);
+            pointer-events: none; /* Don't interfere with knob dragging */
+            box-shadow: 0 0 5px var(--glow-color);
+        }
+
+        .knob-center-button {
+            width: var(--center-button-size);
+            height: var(--center-button-size);
+            background-color: var(--center-bg);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            border: 2px solid rgba(0,0,0,0.3);
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
+            transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+        }
+
+        .knob-center-button:hover {
+             background-color: var(--center-active-bg);
+        }
+
+        .knob-center-button:active {
+            background-color: var(--indicator-color); /* Use indicator color on click */
+            transform: translate(-50%, -50%) scale(0.95); /* Push effect */
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.6);
+        }
+
+        .knob-value-display {
+            margin-top: 15px;
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #333;
+            min-width: 40px; /* Ensure space for two digits */
+            text-align: center;
+        }
+
+        .knob-instructions {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+            text-align: center;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>Interactive Knob Control</h1>
+
+    <div class="knob-control-container" id="myKnobContainer">
+        <div class="knob" id="myKnob">
+            <!-- Indicator will be rotated by JS -->
+            <div class="knob-indicator"></div>
+            <!-- Center button is separate -->
+            <div class="knob-center-button" id="myKnobCenter"></div>
+        </div>
+        <span class="knob-value-display" id="myKnobValueDisplay">1</span>
+        <!-- Hidden input to store value for forms -->
+        <input type="hidden" id="myKnobInput" name="knobValue" value="1" min="1" max="10">
+        <p class="knob-instructions">Drag to turn (1-10), click center to activate.</p>
+    </div>
+
+    <div id="click-message" style="margin-top: 20px; color: green; font-weight: bold;"></div>
+
+    <!-- GSAP Core and Draggable Plugin via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/Draggable.min.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const knob = document.getElementById('myKnob');
+            const centerButton = document.getElementById('myKnobCenter');
+            const valueDisplay = document.getElementById('myKnobValueDisplay');
+            const hiddenInput = document.getElementById('myKnobInput');
+            const clickMessage = document.getElementById('click-message');
+
+            const minValue = 1;
+            const maxValue = 10;
+            const totalSteps = maxValue - minValue + 1; // 10 steps
+
+            // Define the rotational range (e.g., 270 degrees)
+            const totalRangeDegrees = 270;
+            const startAngle = -135; // Start angle (corresponds to value 1)
+            const endAngle = startAngle + totalRangeDegrees; // End angle (corresponds to value 10)
+            const degreesPerStep = totalRangeDegrees / (totalSteps - 1); // Angle between each step
+
+            // Function to convert value (1-10) to rotation angle
+            function valueToRotation(value) {
+                // Clamp value just in case
+                const clampedValue = Math.max(minValue, Math.min(maxValue, value));
+                // Map value (1-10) to angle (-135 to 135)
+                return startAngle + (clampedValue - minValue) * degreesPerStep;
+            }
+
+            // Function to convert rotation angle to value (1-10)
+            function rotationToValue(rotation) {
+                // Normalize rotation within the defined range if it goes beyond due to inertia
+                 let normalizedRotation = rotation % 360;
+                 if (normalizedRotation > 180) normalizedRotation -= 360;
+                 if (normalizedRotation < -180) normalizedRotation += 360;
+
+                // Clamp rotation to the allowed range
+                const clampedRotation = Math.max(startAngle, Math.min(endAngle, normalizedRotation));
+
+                // Calculate value based on rotation
+                const value = Math.round((clampedRotation - startAngle) / degreesPerStep) + minValue;
+                return Math.max(minValue, Math.min(maxValue, value)); // Ensure value is within 1-10
+            }
+
+            // Function to update UI elements
+            function updateUI(value, rotation) {
+                valueDisplay.textContent = value;
+                hiddenInput.value = value;
+                // Note: GSAP handles the knob's rotation directly via Draggable
+            }
+
+            // Initialize knob rotation based on the hidden input's initial value
+            const initialValue = parseInt(hiddenInput.value, 10);
+            const initialRotation = valueToRotation(initialValue);
+            gsap.set(knob, { rotation: initialRotation });
+            updateUI(initialValue, initialRotation);
+
+            // --- GSAP Draggable Setup ---
+            Draggable.create(knob, {
+                type: "rotation", // We want rotational dragging
+                inertia: true, // Add some inertial movement after release
+                throwResistance: 15000, // Higher value = less throw distance
+                bounds: { // Define min/max rotation
+                   minRotation: startAngle - (degreesPerStep / 2), // Allow slightly past for snapping
+                   maxRotation: endAngle + (degreesPerStep / 2)
+                },
+                snap: function(endValue) {
+                    // Snap to the nearest step angle
+                    const snappedRotation = Math.round((endValue - startAngle) / degreesPerStep) * degreesPerStep + startAngle;
+                    // Ensure snapped rotation is within the precise bounds
+                    const clampedSnap = Math.max(startAngle, Math.min(endAngle, snappedRotation));
+                    return clampedSnap;
+                },
+                onDrag: function() {
+                    const currentRotation = this.rotation;
+                    const currentValue = rotationToValue(currentRotation);
+                    updateUI(currentValue, currentRotation);
+                },
+                onThrowUpdate: function() {
+                    // Update during inertia movement
+                    const currentRotation = this.rotation;
+                    const currentValue = rotationToValue(currentRotation);
+                    updateUI(currentValue, currentRotation);
+                },
+                onDragEnd: function() {
+                    // Final update after drag/throw finishes and snaps
+                    // Use the snapped end rotation provided by GSAP's internal snapping
+                    const finalRotation = this.rotation; // GSAP already applied snap here
+                    const finalValue = rotationToValue(finalRotation);
+                    updateUI(finalValue, finalRotation);
+                    console.log(`Knob set to value: ${finalValue} (Rotation: ${finalRotation.toFixed(2)}°)`);
+                },
+                 onPress: function() {
+                    // Add visual feedback on press if desired (already handled by :active CSS)
+                    // console.log("Knob pressed");
+                 },
+                 onRelease: function() {
+                    // console.log("Knob released");
+                 }
+            });
+
+            // --- Center Button Click Handler ---
+            centerButton.addEventListener('click', (event) => {
+                event.stopPropagation(); // Prevent triggering knob drag if click overlaps slightly
+
+                const currentValue = hiddenInput.value;
+                console.log(`Center button clicked! Current knob value: ${currentValue}`);
+                clickMessage.textContent = `Center button clicked! Knob value: ${currentValue}`;
+                // Add a quick visual pulse effect
+                gsap.fromTo(centerButton,
+                    { scale: 0.9 },
+                    { scale: 1, duration: 0.3, ease: "elastic.out(1, 0.5)" }
+                );
+
+                // Clear the message after a few seconds
+                setTimeout(() => {
+                    clickMessage.textContent = '';
+                }, 3000);
+            });
+
+            // Prevent default drag behavior on the center button which might interfere
+            centerButton.addEventListener('dragstart', (e) => e.preventDefault());
+             // Prevent touch events on button from propagating to knob drag
+             centerButton.addEventListener('touchstart', (e) => e.stopPropagation());
+             centerButton.addEventListener('touchmove', (e) => e.stopPropagation());
+             centerButton.addEventListener('touchend', (e) => e.stopPropagation());
+
+
+        });
+    </script>
+
+</body>
+</html>

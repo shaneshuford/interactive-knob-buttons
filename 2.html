@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Knob Control</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/gsap.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background: #121212;
+            color: white;
+            touch-action: none; /* Prevent default touch actions like scrolling */
+            user-select: none; /* Prevent text selection */
+        }
+
+        .container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+        }
+
+        .knob-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .knob-base {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #1a1a1a, #222);
+            box-shadow: 8px 8px 16px #0a0a0a,
+                        -8px -8px 16px #2a2a2a;
+        }
+
+        .tick-marks {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            /* Pointer events none prevents tick marks from interfering with knob drag */
+            pointer-events: none;
+        }
+
+        .tick {
+            position: absolute;
+            top: 10px; /* Position tick near the edge */
+            left: 50%;
+            width: 2px;
+            height: 10px;
+            background-color: #666;
+            /* Rotate ticks around the center (150px down from top edge) */
+            transform-origin: 50% 140px;
+            transform: translateX(-50%); /* Center the tick horizontally */
+        }
+
+        .tick.major {
+            height: 15px;
+            width: 3px;
+            background-color: #888;
+        }
+
+        .tick-label {
+            position: absolute;
+            color: #999;
+            font-size: 14px;
+            text-align: center;
+            width: 24px; /* Fixed width/height for centering */
+            height: 24px;
+            line-height: 24px; /* Vertically center text */
+            /* Pointer events none prevents labels from interfering with knob drag */
+            pointer-events: none;
+        }
+
+        .knob {
+            position: absolute;
+            /* Center knob within its container */
+            top: 50%;
+            left: 50%;
+            width: 70%;
+            height: 70%;
+            /* Use translate to refine centering after setting top/left to 50% */
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            background: linear-gradient(145deg, #2a2a2a, #333);
+            box-shadow: 4px 4px 8px #0a0a0a,
+                        -4px -4px 8px #2a2a2a;
+            cursor: grab; /* Indicate draggable */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .knob:active {
+             cursor: grabbing;
+        }
+
+        .knob-indicator {
+            position: absolute;
+            top: 10%; /* Position indicator towards the top edge of the knob */
+            left: 50%;
+            width: 4px;
+            height: 25%;
+            background-color: #4285f4;
+            border-radius: 2px;
+            transform: translateX(-50%); /* Center the indicator horizontally */
+        }
+
+        .center-button {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30%;
+            height: 30%;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #333, #2a2a2a);
+            box-shadow: inset 2px 2px 4px #1a1a1a,
+                       inset -2px -2px 4px #3a3a3a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: #4285f4;
+            font-size: 16px;
+            transition: all 0.2s ease;
+        }
+
+        .center-button:active {
+            box-shadow: inset 4px 4px 8px #1a1a1a,
+                       inset -2px -2px 4px #3a3a3a;
+            font-size: 14px;
+        }
+
+        .feedback {
+            margin-top: 30px;
+            font-size: 18px;
+            min-height: 1.5em; /* Prevent layout shift */
+            text-align: center;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%); /* Center notification */
+            background-color: rgba(66, 133, 244, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            pointer-events: none; /* Don't interfere with interactions */
+        }
+
+        /* Glow effect when knob is at a snap point */
+        .knob.snapped {
+            box-shadow: 0 0 15px 5px rgba(66, 133, 244, 0.5),
+                        4px 4px 8px #0a0a0a,
+                        -4px -4px 8px #2a2a2a;
+        }
+
+        /* Button press glow */
+        .center-button.pressed {
+            box-shadow: 0 0 20px 5px rgba(66, 133, 244, 0.7),
+                       inset 4px 4px 8px #1a1a1a,
+                       inset -2px -2px 4px #3a3a3a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="knob-container" id="knobContainer">
+            <div class="knob-base"></div>
+            <div class="tick-marks" id="tickMarks"></div>
+            <div class="knob" id="knob">
+                <div class="knob-indicator"></div>
+                <div class="center-button" id="centerButton">PUSH</div>
+            </div>
+        </div>
+    </div>
+    <div class="feedback" id="feedback">Value: 1</div>
+    <div class="notification" id="notification"></div>
+
+    <script>
+        const knob = document.getElementById('knob');
+        const centerButton = document.getElementById('centerButton');
+        const feedback = document.getElementById('feedback');
+        const notification = document.getElementById('notification');
+        const tickMarksContainer = document.getElementById('tickMarks');
+        const knobContainer = document.getElementById('knobContainer'); // Get knob container
+
+        // Configuration
+        const numPositions = 10;
+        const degreesPerPosition = 360 / numPositions; // 36 degrees per position
+        const snapThreshold = degreesPerPosition / 4; // How close to snap point (9 degrees)
+        const rotationRange = 360; // Allow full rotation
+
+        // State
+        let currentRotation = 0; // Initial rotation corresponding to value 1
+        let startAngle = 0; // Angle at the start of a drag relative to knob center
+        let currentDragAngle = 0; // Current angle during drag relative to knob center
+        let currentValue = 1;
+        let isDragging = false;
+        let isSnapped = true; // Start snapped at initial position
+
+        // Create tick marks and labels
+        for (let i = 0; i < numPositions; i++) {
+            const angle = i * degreesPerPosition;
+
+            // Create tick mark
+            const tick = document.createElement('div');
+            // Make ticks for 1 and 5 slightly more prominent if desired (example)
+            // tick.className = (i === 0 || i === 4) ? 'tick major' : 'tick';
+            tick.className = 'tick'; // Use standard ticks for all
+            // Apply rotation using transform. translateX(-50%) is now in CSS.
+            tick.style.transform = `rotate(${angle}deg)`;
+            tickMarksContainer.appendChild(tick);
+
+            // Create label for every position
+            const label = document.createElement('div');
+            label.className = 'tick-label';
+            label.textContent = i + 1;
+
+            // Position the label around the outside of the circle
+            const labelAngleRad = angle * Math.PI / 180; // Convert to radians
+            const radius = 135; // Distance from center (adjust as needed)
+            // Calculate position relative to the center of the container (150, 150)
+            const centerX = 150;
+            const centerY = 150;
+            const x = centerX + Math.sin(labelAngleRad) * radius; // Use sin for X for 0deg at top
+            const y = centerY - Math.cos(labelAngleRad) * radius; // Use -cos for Y for 0deg at top
+
+            label.style.left = `${x}px`;
+            label.style.top = `${y}px`;
+            // Center the label element itself on its calculated position
+            label.style.transform = 'translate(-50%, -50%)';
+
+            // *** FIX: Append labels to the main knob container for correct positioning ***
+            knobContainer.appendChild(label);
+        }
+
+        // Set initial snapped state visually
+        knob.classList.add('snapped');
+        // Apply initial rotation (0 degrees for value 1)
+        gsap.set(knob, { rotation: currentRotation });
+
+
+        function getPointerAngle(e) {
+            const pointer = e.touches ? e.touches[0] : e;
+            const knobRect = knob.getBoundingClientRect();
+            const knobCenterX = knobRect.left + knobRect.width / 2;
+            const knobCenterY = knobRect.top + knobRect.height / 2;
+
+            // Calculate angle from knob center to pointer position
+            return Math.atan2(
+                pointer.clientY - knobCenterY,
+                pointer.clientX - knobCenterX
+            ) * (180 / Math.PI); // Convert to degrees
+        }
+
+
+        // Handle touch/mouse events for rotation
+        function startDrag(e) {
+            // Ignore drag start if clicking the center button
+            if (e.target === centerButton || centerButton.contains(e.target)) return;
+
+            isDragging = true;
+            knob.classList.remove('snapped'); // Remove snap effect during drag
+            isSnapped = false;
+
+            // Calculate the angle difference between current knob rotation and pointer angle
+            startAngle = getPointerAngle(e) - currentRotation;
+
+            // Prevent default to avoid page scrolling on mobile / text selection on desktop
+            e.preventDefault();
+        }
+
+        function drag(e) {
+            if (!isDragging) return;
+
+            currentDragAngle = getPointerAngle(e);
+            let newRotation = currentDragAngle - startAngle;
+
+             // Keep rotation within a logical range if needed, but generally allow wrapping
+            // newRotation = newRotation % 360; // Basic wrapping
+
+            // *** FIX: Removed value update logic from here ***
+            // Check if near a snap point for intermediate haptic/visual feedback *during* drag
+            const closestSnapPos = Math.round(newRotation / degreesPerPosition);
+            const closestSnapAngle = closestSnapPos * degreesPerPosition;
+
+            if (Math.abs(newRotation - closestSnapAngle) < snapThreshold) {
+                 // Optional: Add temporary snap class or haptic feedback during drag
+                 // if (!isSnapped) { // Check if wasn't already marked as snapped in this drag cycle
+                 //    if (navigator.vibrate) { navigator.vibrate(10); }
+                 //    // knob.classList.add('snapped-interim'); // Example for temp style
+                 //    // isSnapped = true; // Mark as temporarily snapped
+                 // }
+            } else {
+                // isSnapped = false; // Reset temp snap state
+                // knob.classList.remove('snapped-interim');
+            }
+
+
+            // Apply rotation directly using GSAP for potential performance benefits
+            gsap.set(knob, { rotation: newRotation });
+            currentRotation = newRotation; // Update current rotation state
+
+            // Prevent default
+            e.preventDefault();
+        }
+
+        function endDrag() {
+            if (!isDragging) return;
+            isDragging = false;
+
+            // Snap to closest position
+            // Use the currentRotation which reflects the final drag position
+            const snapPosition = Math.round(currentRotation / degreesPerPosition);
+            const snapAngle = snapPosition * degreesPerPosition;
+
+            // Animate to the final snap position
+            gsap.to(knob, {
+                duration: 0.3,
+                rotation: snapAngle,
+                ease: "elastic.out(1, 0.7)", // Use a slightly bouncy ease
+                // *** FIX: Removed redundant onUpdate callback ***
+                onComplete: function() {
+                    // Update currentRotation state AFTER animation completes
+                    currentRotation = snapAngle;
+
+                    // Calculate and update value (1 to 10)
+                    // Normalize the position to be 0-9, handling negative rotations
+                    const normalizedPosition = ((snapPosition % numPositions) + numPositions) % numPositions;
+                    currentValue = normalizedPosition + 1;
+
+                    // Update feedback display
+                    feedback.textContent = `Value: ${currentValue}`;
+
+                    // Add final visual feedback for snapped state
+                    knob.classList.add('snapped');
+                    isSnapped = true;
+
+                    // Final haptic feedback for snap completion
+                    if (navigator.vibrate) {
+                        navigator.vibrate(30);
+                    }
+                }
+            });
+        }
+
+        // Center button click handler
+        function centerButtonClick(e) {
+            // Add visual feedback
+            centerButton.classList.add('pressed');
+
+            // Add haptic feedback
+            if (navigator.vibrate) {
+                navigator.vibrate(50); // Slightly longer vibration for press
+            }
+
+            // Show notification
+            notification.textContent = `Center button pressed at value ${currentValue}!`;
+            gsap.to(notification, { duration: 0.3, opacity: 1 }); // Fade in notification
+
+            // Hide notification after a delay
+            gsap.to(notification, { duration: 0.3, opacity: 0, delay: 2 }); // Fade out
+
+            // Remove pressed class after a short delay (allows visual feedback)
+            setTimeout(() => {
+                centerButton.classList.remove('pressed');
+            }, 200);
+
+            // Stop propagation to prevent knob drag from starting
+            e.stopPropagation();
+            e.preventDefault(); // Also prevent default for touchstart
+        }
+
+        // Add event listeners for mouse
+        knob.addEventListener('mousedown', startDrag);
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', endDrag);
+        // Handle mouse leaving the window during drag
+        document.addEventListener('mouseleave', endDrag);
+
+
+        // Add event listeners for touch
+        knob.addEventListener('touchstart', startDrag, { passive: false });
+        document.addEventListener('touchmove', drag, { passive: false });
+        document.addEventListener('touchend', endDrag);
+        document.addEventListener('touchcancel', endDrag); // Handle cancelled touches
+
+
+        // Center button event (use click for mouse, touchend for touch for better reliability)
+        centerButton.addEventListener('click', centerButtonClick);
+        // Use touchend for button press on touch devices
+        centerButton.addEventListener('touchend', centerButtonClick);
+        // Prevent touchstart on button from starting knob drag
+        centerButton.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+            // Optionally add immediate visual feedback on touchstart
+            centerButton.classList.add('pressed');
+        }, { passive: true }); // Passive true here as we only stop propagation
+
+
+        // Prevent context menu on long press (mobile)
+        knob.addEventListener('contextmenu', e => e.preventDefault());
+        centerButton.addEventListener('contextmenu', e => e.preventDefault());
+
+    </script>
+</body>
+</html>

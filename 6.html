@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Knob Control</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh; /* Use min-height */
+            margin: 0;
+            background-color: #e0e5ec; /* Light Neumorphic background */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Nicer font */
+        }
+        canvas {
+            /* Remove default border if adding shadow/border-radius */
+            /* border: 1px solid #ccc; */
+            cursor: grab;
+            display: block; /* Prevents extra space below */
+            /* Add rounded corners and shadow for a softer look */
+             border-radius: 50%;
+             box-shadow: 9px 9px 16px rgba(163, 177, 198, 0.6),
+                         -9px -9px 16px rgba(255, 255, 255, 0.5);
+            /* Optionally make canvas bg transparent if body bg is nice */
+             background-color: transparent;
+        }
+        canvas:active {
+            cursor: grabbing;
+            /* Slightly inset shadow on press */
+             box-shadow: inset 6px 6px 10px rgba(163, 177, 198, 0.7),
+                         inset -6px -6px 10px rgba(255, 255, 255, 0.6);
+        }
+        #value-display {
+            margin-top: 30px; /* More space */
+            font-size: 1.5em; /* Larger display */
+            color: #555;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="knobCanvas"></canvas> <!-- Size set in JS -->
+    <div id="value-display">Value: 1</div>
+
+    <script>
+        class KnobControl {
+            static defaultConfig = {
+                canvasSize: 220, // Slightly larger canvas for shadow room
+                knobRadiusRatio: 0.38, // Knob radius relative to canvas size
+                markLengthRatio: 0.05, // Mark length relative to canvas size
+                markWidth: 1,
+                pointerWidthRatio: 0.08, // Width of pointer base relative to knob radius
+                pointerLengthRatio: 0.9, // Pointer length relative to knob radius
+                buttonRadiusRatio: 0.15, // Button radius relative to canvas size
+                numSteps: 10,
+                minValue: 1,
+                initialValue: 1,
+                numberDistanceRatio: 1.25, // Distance of numbers from knob radius center
+                // --- Enhanced Colors ---
+                bgColorLight: '#f0f3f7', // Light part of knob gradient
+                bgColorDark: '#d1d9e6',  // Dark part of knob gradient
+                borderColor: '#c8d0e7',  // Subtle border
+                markColor: '#99a3b5',    // Softer marks
+                numberColor: '#6d7a90',  // Softer numbers
+                pointerColor: '#3498db', // A nice blue pointer
+                pointerBorderColor: '#2980b9',
+                buttonColorLight: '#e6eaf2',
+                buttonColorDark: '#cad3e0',
+                buttonPressedColorLight: '#c8cfda', // Darker when pressed
+                buttonPressedColorDark: '#b4bdcc',
+                // --- Style ---
+                borderWidth: 1,
+                numberFont: '12px Segoe UI, sans-serif', // Font size relative to canvas might be better
+            };
+
+            constructor(canvasId, options = {}) {
+                this.canvas = document.getElementById(canvasId);
+                if (!this.canvas) {
+                    console.error(`Canvas element with id "${canvasId}" not found.`);
+                    return;
+                }
+                this.ctx = this.canvas.getContext('2d');
+                this.config = { ...KnobControl.defaultConfig, ...options };
+
+                // Calculate dimensions based on ratios and canvas size
+                this.canvas.width = this.config.canvasSize;
+                this.canvas.height = this.config.canvasSize;
+                this.center = { x: this.canvas.width / 2, y: this.canvas.height / 2 };
+                this.knobRadius = this.config.canvasSize * this.config.knobRadiusRatio;
+                this.markLength = this.config.canvasSize * this.config.markLengthRatio;
+                this.markRadius = this.knobRadius - this.markLength * 0.5; // Start marks slightly inside edge
+                this.pointerLength = this.knobRadius * this.config.pointerLengthRatio;
+                this.pointerWidth = this.knobRadius * this.config.pointerWidthRatio;
+                this.buttonRadius = this.config.canvasSize * this.config.buttonRadiusRatio;
+
+                this.stepAngleRad = (2 * Math.PI) / this.config.numSteps;
+
+                this.state = {
+                    value: this.config.initialValue,
+                    isDragging: false,
+                    isButtonPressed: false,
+                };
+
+                this.valueDisplayElement = document.getElementById('value-display');
+
+                this._bindEvents();
+                this.setValue(this.config.initialValue, true); // Initial draw without event
+                this._updateValueDisplay(); // Ensure initial display is correct
+            }
+
+            _degToRad(degrees) { return degrees * (Math.PI / 180); }
+
+            _getEventCoordinates(event) {
+                 const rect = this.canvas.getBoundingClientRect();
+                 let clientX, clientY;
+                 if (event.touches) {
+                     if (event.touches.length > 0) {
+                         clientX = event.touches[0].clientX; clientY = event.touches[0].clientY;
+                     } else if (event.changedTouches && event.changedTouches.length > 0) {
+                         clientX = event.changedTouches[0].clientX; clientY = event.changedTouches[0].clientY;
+                     } else { return null; }
+                 } else { clientX = event.clientX; clientY = event.clientY; }
+                 return { x: clientX - rect.left, y: clientY - rect.top };
+            }
+
+            _isPointInButton(x, y) {
+                const dx = x - this.center.x; const dy = y - this.center.y;
+                return Math.sqrt(dx * dx + dy * dy) < this.buttonRadius;
+            }
+
+             _updateValueFromCoords(x, y) {
+                const dx = x - this.center.x; const dy = y - this.center.y;
+                let angleRad = Math.atan2(dy, dx);
+                if (angleRad < -Math.PI / 2) { // Adjusting zero point to be top (optional)
+                     angleRad += 2.5 * Math.PI; // Shift so 0 is roughly at the top-left visually for step 1
+                } else {
+                     angleRad += Math.PI / 2; // Shift remaining part
+                }
+                if (angleRad < 0) angleRad += 2 * Math.PI; // Ensure 0 to 2PI range
+
+                const stepIndex = Math.round(angleRad / this.stepAngleRad) % this.config.numSteps;
+                const newValue = this.config.minValue + stepIndex;
+                if (newValue !== this.state.value) {
+                    this.setValue(newValue);
+                }
+            }
+
+            // --- Drawing Methods ---
+
+             _drawBackground() {
+                // --- Knob Body Gradient ---
+                const gradient = this.ctx.createRadialGradient(
+                    this.center.x - this.knobRadius * 0.3, // Offset light source slightly
+                    this.center.y - this.knobRadius * 0.4,
+                    this.knobRadius * 0.1, // Inner radius of gradient light spot
+                    this.center.x,
+                    this.center.y,
+                    this.knobRadius * 1.2 // Outer radius of gradient
+                );
+                gradient.addColorStop(0, this.config.bgColorLight);
+                gradient.addColorStop(1, this.config.bgColorDark);
+
+                this.ctx.beginPath();
+                this.ctx.arc(this.center.x, this.center.y, this.knobRadius, 0, 2 * Math.PI);
+                this.ctx.fillStyle = gradient;
+                this.ctx.fill();
+
+                // --- Optional Subtle Border ---
+                this.ctx.strokeStyle = this.config.borderColor;
+                this.ctx.lineWidth = this.config.borderWidth;
+                this.ctx.stroke();
+            }
+
+            _drawMarkingsAndNumbers() {
+                this.ctx.strokeStyle = this.config.markColor;
+                this.ctx.fillStyle = this.config.numberColor;
+                this.ctx.font = this.config.numberFont;
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'middle';
+
+                const numberDist = this.knobRadius * this.config.numberDistanceRatio;
+
+                for (let i = 0; i < this.config.numSteps; i++) {
+                    // Angle adjusted to match the visual start (top)
+                    const angle = (i * this.stepAngleRad) - (Math.PI / 2);
+
+                    // --- Marks ---
+                    const x1 = this.center.x + this.markRadius * Math.cos(angle);
+                    const y1 = this.center.y + this.markRadius * Math.sin(angle);
+                    const x2 = this.center.x + (this.markRadius + this.markLength) * Math.cos(angle);
+                    const y2 = this.center.y + (this.markRadius + this.markLength) * Math.sin(angle);
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x1, y1);
+                    this.ctx.lineTo(x2, y2);
+                    this.ctx.lineWidth = this.config.markWidth;
+                    this.ctx.stroke();
+
+                    // --- Numbers ---
+                    const tx = this.center.x + numberDist * Math.cos(angle);
+                    const ty = this.center.y + numberDist * Math.sin(angle);
+                    const numValue = this.config.minValue + i;
+                    this.ctx.fillText(numValue.toString(), tx, ty);
+                }
+            }
+
+             _drawPointer() {
+                // Angle calculation needs to align with markings/numbers
+                const valueRatio = this.state.value - this.config.minValue;
+                const pointerAngle = (valueRatio * this.stepAngleRad) - (Math.PI / 2); // Align with top start
+
+                // --- Triangle Pointer ---
+                const tipX = this.center.x + this.pointerLength * Math.cos(pointerAngle);
+                const tipY = this.center.y + this.pointerLength * Math.sin(pointerAngle);
+
+                // Base vertices (perpendicular to the pointer direction)
+                const anglePlus90 = pointerAngle + Math.PI / 2;
+                const baseCenterX = this.center.x + this.pointerWidth * 0.1 * Math.cos(pointerAngle); // Slightly offset base from center
+                const baseCenterY = this.center.y + this.pointerWidth * 0.1 * Math.sin(pointerAngle);
+
+                const baseX1 = baseCenterX + this.pointerWidth / 2 * Math.cos(anglePlus90);
+                const baseY1 = baseCenterY + this.pointerWidth / 2 * Math.sin(anglePlus90);
+                const baseX2 = baseCenterX - this.pointerWidth / 2 * Math.cos(anglePlus90);
+                const baseY2 = baseCenterY - this.pointerWidth / 2 * Math.sin(anglePlus90);
+
+                this.ctx.beginPath();
+                this.ctx.moveTo(tipX, tipY);
+                this.ctx.lineTo(baseX1, baseY1);
+                this.ctx.lineTo(baseX2, baseY2);
+                this.ctx.closePath();
+
+                this.ctx.fillStyle = this.config.pointerColor;
+                this.ctx.fill();
+
+                // Optional border for the pointer
+                this.ctx.strokeStyle = this.config.pointerBorderColor;
+                this.ctx.lineWidth = 1;
+                this.ctx.stroke();
+            }
+
+            _drawCenterButton() {
+                // --- Button Gradient ---
+                 const gradient = this.ctx.createRadialGradient(
+                    this.center.x - this.buttonRadius * 0.3, // Light source offset
+                    this.center.y - this.buttonRadius * 0.4,
+                    this.buttonRadius * 0.1,
+                    this.center.x,
+                    this.center.y,
+                    this.buttonRadius
+                );
+
+                if (this.state.isButtonPressed) {
+                     gradient.addColorStop(0, this.config.buttonPressedColorLight);
+                     gradient.addColorStop(1, this.config.buttonPressedColorDark);
+                 } else {
+                     gradient.addColorStop(0, this.config.buttonColorLight);
+                     gradient.addColorStop(1, this.config.buttonColorDark);
+                 }
+
+                this.ctx.beginPath();
+                this.ctx.arc(this.center.x, this.center.y, this.buttonRadius, 0, 2 * Math.PI);
+                this.ctx.fillStyle = gradient;
+                this.ctx.fill();
+
+                // --- Button Border ---
+                this.ctx.strokeStyle = this.config.borderColor; // Use main border color
+                this.ctx.lineWidth = this.config.borderWidth;
+                this.ctx.stroke();
+            }
+
+
+            draw() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this._drawBackground();
+                this._drawMarkingsAndNumbers(); // Draw marks under pointer
+                this._drawPointer();
+                this._drawCenterButton();
+                this.ctx.lineWidth = this.config.borderWidth; // Reset just in case
+            }
+
+             setValue(newValue, forceRedraw = false) {
+                 const maxValue = this.config.minValue + this.config.numSteps - 1;
+                 const clampedValue = Math.max(this.config.minValue, Math.min(newValue, maxValue));
+
+                 if (this.state.value !== clampedValue || forceRedraw) {
+                     const oldValue = this.state.value;
+                     this.state.value = clampedValue;
+                     this.draw();
+                     this._updateValueDisplay();
+
+                     // Only dispatch event if value actually changed
+                     if (oldValue !== clampedValue) {
+                         this.canvas.dispatchEvent(new CustomEvent('change', {
+                             detail: { value: this.state.value, oldValue: oldValue },
+                             bubbles: true
+                         }));
+                     }
+                 }
+             }
+
+            getValue() { return this.state.value; }
+
+            _updateValueDisplay() {
+                if (this.valueDisplayElement) {
+                    this.valueDisplayElement.textContent = `Value: ${this.state.value}`;
+                }
+             }
+
+            _bindEvents() {
+                this.canvas.addEventListener('mousedown', this._handleInteractionStart);
+                this.canvas.addEventListener('touchstart', this._handleInteractionStart, { passive: false });
+                window.addEventListener('mousemove', this._handleInteractionMove);
+                window.addEventListener('touchmove', this._handleInteractionMove, { passive: false });
+                window.addEventListener('mouseup', this._handleInteractionEnd);
+                window.addEventListener('touchend', this._handleInteractionEnd);
+                this.canvas.addEventListener('mouseleave', this._handleMouseLeave);
+                 // Optional: Add keyboard support
+                 this.canvas.setAttribute('tabindex', '0'); // Make focusable
+                 this.canvas.addEventListener('keydown', this._handleKeyDown);
+            }
+
+             _handleInteractionStart = (event) => {
+                if (event.type === 'touchstart') event.preventDefault();
+                this.canvas.focus(); // Focus for keyboard events
+                const coords = this._getEventCoordinates(event); if (!coords) return;
+
+                if (this._isPointInButton(coords.x, coords.y)) {
+                    this.state.isButtonPressed = true;
+                    this.draw();
+                } else {
+                    const dx = coords.x - this.center.x; const dy = coords.y - this.center.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    // Only drag if click is within the main knob area (including numbers maybe)
+                    if (dist <= this.knobRadius * this.config.numberDistanceRatio) {
+                         this.state.isDragging = true;
+                         this.canvas.style.cursor = 'grabbing';
+                         this._updateValueFromCoords(coords.x, coords.y); // Update immediately on click
+                    }
+                }
+            }
+
+            _handleInteractionMove = (event) => {
+                if (!this.state.isDragging) return;
+                 if (event.type === 'touchmove') event.preventDefault();
+                const coords = this._getEventCoordinates(event); if (!coords) return;
+                this._updateValueFromCoords(coords.x, coords.y);
+            }
+
+             _handleInteractionEnd = (event) => {
+                const coords = this._getEventCoordinates(event);
+                if (this.state.isButtonPressed) {
+                     if (coords && this._isPointInButton(coords.x, coords.y)) {
+                        console.log('Button clicked');
+                        this.canvas.dispatchEvent(new CustomEvent('buttonclick', { bubbles: true }));
+                    }
+                    this.state.isButtonPressed = false;
+                    // Only redraw if needed (button state changed)
+                     if(!this.state.isDragging) this.draw(); // Avoid double draw if dragging just ended
+                }
+                if (this.state.isDragging) {
+                    this.state.isDragging = false;
+                    this.canvas.style.cursor = 'grab';
+                     // Redraw might be needed if button state changed during drag release
+                     if (this.state.isButtonPressed) this.draw();
+                }
+            }
+
+             _handleMouseLeave = (event) => {
+                 // If dragging and mouse leaves, stop dragging
+                 if (this.state.isDragging) {
+                     this.state.isDragging = false;
+                     this.canvas.style.cursor = 'grab';
+                 }
+                  // Reset button state if mouse leaves while pressed down over button
+                 // if (this.state.isButtonPressed) {
+                 //     this.state.isButtonPressed = false;
+                 //     this.draw();
+                 // }
+            }
+
+             // Basic Keyboard Support
+             _handleKeyDown = (event) => {
+                let changed = false;
+                switch (event.key) {
+                    case 'ArrowRight':
+                    case 'ArrowUp':
+                        this.setValue(this.state.value + 1);
+                        changed = true;
+                        break;
+                    case 'ArrowLeft':
+                    case 'ArrowDown':
+                         this.setValue(this.state.value - 1);
+                        changed = true;
+                        break;
+                    case 'Home':
+                         this.setValue(this.config.minValue);
+                         changed = true;
+                         break;
+                     case 'End':
+                         this.setValue(this.config.minValue + this.config.numSteps - 1);
+                         changed = true;
+                         break;
+                    case 'Enter':
+                    case ' ': // Space
+                         // Simulate button click
+                        console.log('Button clicked via keyboard');
+                        this.canvas.dispatchEvent(new CustomEvent('buttonclick', { bubbles: true }));
+                         // Visual feedback for key press
+                         this.state.isButtonPressed = true;
+                         this.draw();
+                         setTimeout(() => {
+                             this.state.isButtonPressed = false;
+                             this.draw();
+                         }, 150); // Duration of pressed look
+                         changed = true;
+                        break;
+                }
+                 if (changed) {
+                     event.preventDefault(); // Prevent page scrolling
+                 }
+             }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const knob = new KnobControl('knobCanvas', {
+                initialValue: 3,
+                numSteps: 12,
+                minValue: 0,
+                pointerColor: '#e74c3c', // Example: Red pointer
+                pointerBorderColor: '#c0392b',
+            });
+
+            knob.canvas.addEventListener('change', (event) => {
+                console.log('Knob value changed:', event.detail.value);
+                // Display update is now handled internally by default
+            });
+
+            knob.canvas.addEventListener('buttonclick', () => {
+                console.log('Knob center button was clicked!');
+                alert('Center button clicked!');
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Interactive Knob</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        /* Add this at the very top of the <style> block */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+:root {
+    --knob-size: 150px;
+    --bg-color: #2c2c2c;
+    --shadow-dark: #1f1f1f;
+    --shadow-light: #393939;
+    --indicator-color: #00bcd4;
+    --text-color: #e0e0e0;
+    --button-bg: #4a4a4a;
+    --button-active-bg: #5a5a5a;
+    --focus-outline: #00bcd4;
+}
+
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: var(--bg-color);
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: var(--text-color);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.knob-container {
+    position: relative; /* Needed if positioning value absolutely */
+    /* Remove fixed width/height - let it wrap content */
+    /* width: var(--knob-size); */
+    /* height: var(--knob-size); */
+    display: flex; /* Keep flex for easy centering/stacking */
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Interaction area defines the core size */
+.knob-interaction-area {
+     position: relative;
+     /* Explicitly set width AND height here */
+     width: var(--knob-size);
+     height: var(--knob-size);
+     border-radius: 50%; /* Makes it circular */
+     cursor: grab;
+     outline: none;
+     transition: box-shadow 0.3s ease, transform 0.1s ease;
+     /* Ensure it doesn't shrink if container is constrained */
+     flex-shrink: 0;
+}
+
+.knob-interaction-area:focus-visible {
+    box-shadow: 0 0 0 3px var(--bg-color),
+                0 0 0 6px var(--focus-outline);
+}
+
+.knob-interaction-area:active {
+     cursor: grabbing;
+     transform: scale(0.97);
+}
+
+/* knob-outer takes full size of interaction-area */
+.knob-outer {
+    position: absolute;
+    top: 0; /* Ensure it aligns correctly */
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: linear-gradient(145deg, var(--shadow-light), var(--shadow-dark));
+    box-shadow: 6px 6px 12px var(--shadow-dark),
+               -6px -6px 12px var(--shadow-light);
+    pointer-events: none;
+}
+
+.knob-inner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 70%;
+    height: 70%; /* Height should also be percentage */
+    border-radius: 50%;
+    background: var(--bg-color);
+    box-shadow: inset 4px 4px 8px var(--shadow-dark),
+                inset -4px -4px 8px var(--shadow-light);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+}
+
+.center-button {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    /* Make width/height relative to interaction area size */
+    width: 45%;
+    height: 45%;
+    border-radius: 50%;
+    background: var(--button-bg);
+    box-shadow: 2px 2px 5px var(--shadow-dark),
+                -2px -2px 5px var(--shadow-light);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    z-index: 10;
+    pointer-events: auto;
+}
+
+.center-button:hover {
+     background: var(--button-active-bg);
+}
+
+.center-button:active {
+    background: var(--button-active-bg);
+    box-shadow: inset 1px 1px 3px var(--shadow-dark),
+                inset -1px -1px 3px var(--shadow-light);
+    transform: translate(-50%, -50%) scale(0.92);
+}
+
+.center-button .material-icons {
+    font-size: calc(var(--knob-size) * 0.2);
+}
+
+.indicator {
+    position: absolute;
+    width: 6px;
+    /* Let's use fixed height/top for easier origin calculation */
+    height: 25px; /* Adjusted height */
+    top: 12px; /* Fixed distance from top edge */
+    left: calc(50% - 3px); /* Center the indicator element horizontally */
+    background: var(--indicator-color);
+    border-radius: 3px; /* Rounded */
+
+    /* --- THIS IS THE FIX --- */
+    /* Origin X: center (because indicator is centered horizontally) */
+    /* Origin Y: Distance from indicator's top (12px) down to the parent's center */
+    transform-origin: center calc(var(--knob-size) / 2 - 12px); /* Adjust '12px' if you change 'top' */
+
+    /* Keep other styles */
+    will-change: transform;
+    transition: transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    pointer-events: none;
+    z-index: 5;
+}
+
+.value-display {
+    margin-top: 20px; /* Keep margin for spacing below knob */
+    color: var(--text-color);
+    font-size: calc(var(--knob-size) * 0.15);
+    font-weight: 600;
+    min-width: 40px;
+    text-align: center;
+    background: var(--bg-color);
+    padding: 5px 10px;
+    border-radius: 8px;
+    box-shadow: inset 3px 3px 6px var(--shadow-dark),
+                inset -3px -3px 6px var(--shadow-light);
+}
+
+/* Haptic feedback on value change */
+.knob-container.value-changing .knob-outer {
+    animation: subtle-pulse 0.15s ease-out;
+}
+
+@keyframes subtle-pulse {
+    50% { transform: scale(1.02); }
+}
+
+/* Haptic for button press */
+.center-button.haptic-press {
+     animation: button-press-feedback 0.1s ease-out;
+}
+ @keyframes button-press-feedback {
+    50% { transform: translate(-50%, -50%) scale(0.88); }
+}
+
+    </style>
+</head>
+<body>
+    <div class="knob-container" id="myKnob">
+        <!-- Interaction area handles drag, focus, keyboard -->
+        <div
+            class="knob-interaction-area"
+            tabindex="0"
+            role="slider"
+            aria-valuemin="1"
+            aria-valuemax="10"
+            aria-valuenow="1"
+            aria-label="Volume Knob"
+        >
+            <div class="knob-outer"></div>
+            <div class="knob-inner"></div>
+            <div class="indicator"></div>
+            <div class="center-button" id="centerButton">
+                <span class="material-icons">power_settings_new</span> <!-- Different icon example -->
+            </div>
+        </div>
+        <div class="value-display" id="valueDisplay">1</div>
+    </div>
+
+    <script>
+        const knobContainer = document.getElementById('myKnob');
+        const knobInteractionArea = knobContainer.querySelector('.knob-interaction-area');
+        const indicator = knobContainer.querySelector('.indicator');
+        const valueDisplay = document.getElementById('valueDisplay');
+        const centerButton = document.getElementById('centerButton');
+
+        const MIN_VALUE = 1;
+        const MAX_VALUE = 10;
+        const VALUE_RANGE = MAX_VALUE - MIN_VALUE;
+
+        // Define the visual angle range for the knob
+        const MIN_ANGLE = -135; // Corresponds to MIN_VALUE (e.g., bottom-left)
+        const MAX_ANGLE = 135;  // Corresponds to MAX_VALUE (e.g., bottom-right)
+        const ANGLE_RANGE = MAX_ANGLE - MIN_ANGLE; // Total sweep angle (270 degrees)
+
+        let currentValue = MIN_VALUE;
+        let isDragging = false;
+
+        // --- Helper Functions ---
+
+        function updateKnob(value, angle) {
+            const clampedValue = Math.max(MIN_VALUE, Math.min(MAX_VALUE, Math.round(value)));
+            const clampedAngle = Math.max(MIN_ANGLE, Math.min(MAX_ANGLE, angle));
+
+            // Snap angle to the discrete value
+            const stepAngle = ANGLE_RANGE / VALUE_RANGE;
+            const snappedAngle = MIN_ANGLE + (clampedValue - MIN_VALUE) * stepAngle;
+
+            if (currentValue !== clampedValue) {
+                currentValue = clampedValue;
+                valueDisplay.textContent = currentValue;
+                knobInteractionArea.setAttribute('aria-valuenow', currentValue);
+
+                // Add subtle feedback class and remove after animation
+                knobContainer.classList.add('value-changing');
+                setTimeout(() => {
+                    knobContainer.classList.remove('value-changing');
+                }, 150); // Match animation duration
+            }
+
+            indicator.style.transform = `rotate(${snappedAngle}deg)`;
+        }
+
+        function calculateAngle(clientX, clientY) {
+            const rect = knobInteractionArea.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            // Calculate angle relative to center, correcting for atan2's range
+            // Add 90 degrees to make 0 degrees point upwards
+            const radians = Math.atan2(clientY - centerY, clientX - centerX);
+            let degrees = radians * (180 / Math.PI) + 90;
+             // Normalize degrees to be within -180 to 180 (relative to top)
+            if (degrees > 180) {
+                degrees -= 360;
+            }
+             return degrees;
+        }
+
+        function angleToValue(angle) {
+            // Clamp angle to the visual range
+            const clampedAngle = Math.max(MIN_ANGLE, Math.min(MAX_ANGLE, angle));
+            // Calculate proportion within the angle range
+            const proportion = (clampedAngle - MIN_ANGLE) / ANGLE_RANGE;
+            // Map proportion to value range
+            const value = MIN_VALUE + proportion * VALUE_RANGE;
+            return Math.round(value); // Round to nearest step
+        }
+
+        // --- Event Handlers ---
+
+        function handleInteractionStart(event) {
+            event.preventDefault(); // Prevent text selection/scrolling
+            isDragging = true;
+            knobInteractionArea.focus(); // Ensure focus for keyboard/styling
+            knobInteractionArea.style.cursor = 'grabbing'; // Change cursor immediately
+            // Optional: Add initial interaction feedback if needed
+        }
+
+        function handleInteractionMove(event) {
+            if (!isDragging) return;
+            event.preventDefault();
+
+            const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+            const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+            const currentAngle = calculateAngle(clientX, clientY);
+            const newValue = angleToValue(currentAngle);
+
+            // Update based on calculated value and let updateKnob handle snapping/display
+            updateKnob(newValue, currentAngle); // Pass angle for potential future use
+        }
+
+        function handleInteractionEnd() {
+            if (!isDragging) return;
+            isDragging = false;
+            knobInteractionArea.style.cursor = 'grab';
+
+            // Final snap based on the current value
+            const stepAngle = ANGLE_RANGE / VALUE_RANGE;
+            const finalAngle = MIN_ANGLE + (currentValue - MIN_VALUE) * stepAngle;
+            indicator.style.transform = `rotate(${finalAngle}deg)`;
+        }
+
+        function handleKeyDown(event) {
+             let newValue = currentValue;
+             let changed = false;
+
+             switch (event.key) {
+                case 'ArrowRight':
+                case 'ArrowUp':
+                    newValue = Math.min(MAX_VALUE, currentValue + 1);
+                    changed = true;
+                    break;
+                case 'ArrowLeft':
+                case 'ArrowDown':
+                    newValue = Math.max(MIN_VALUE, currentValue - 1);
+                    changed = true;
+                    break;
+                case 'Home':
+                     newValue = MIN_VALUE;
+                     changed = true;
+                     break;
+                 case 'End':
+                     newValue = MAX_VALUE;
+                     changed = true;
+                     break;
+                 default:
+                    return; // Exit if not a relevant key
+            }
+
+            if (changed) {
+                event.preventDefault(); // Prevent page scrolling
+                const stepAngle = ANGLE_RANGE / VALUE_RANGE;
+                const targetAngle = MIN_ANGLE + (newValue - MIN_VALUE) * stepAngle;
+                updateKnob(newValue, targetAngle);
+            }
+        }
+
+        function handleCenterButtonClick() {
+            console.log('Center button pressed! Current Value:', currentValue);
+             // Add haptic feedback
+             centerButton.classList.add('haptic-press');
+             setTimeout(() => {
+                 centerButton.classList.remove('haptic-press');
+             }, 100); // Match animation duration
+
+            // --- Add your center button action here ---
+            // Example: Toggle power state, mute, etc.
+        }
+
+
+        // --- Initial Setup ---
+        function initializeKnob() {
+            const initialAngle = MIN_ANGLE + (currentValue - MIN_VALUE) * (ANGLE_RANGE / VALUE_RANGE);
+            updateKnob(currentValue, initialAngle);
+        }
+
+        // --- Attach Event Listeners ---
+
+        // Mouse Events
+        knobInteractionArea.addEventListener('mousedown', handleInteractionStart);
+        document.addEventListener('mousemove', handleInteractionMove); // Listen on document
+        document.addEventListener('mouseup', handleInteractionEnd);     // Listen on document
+
+        // Touch Events
+        knobInteractionArea.addEventListener('touchstart', handleInteractionStart, { passive: false }); // Need passive: false to call preventDefault
+        document.addEventListener('touchmove', handleInteractionMove, { passive: false }); // Listen on document
+        document.addEventListener('touchend', handleInteractionEnd);     // Listen on document
+        document.addEventListener('touchcancel', handleInteractionEnd);  // Handle cancellation
+
+        // Keyboard Events
+        knobInteractionArea.addEventListener('keydown', handleKeyDown);
+
+        // Center Button Click
+        centerButton.addEventListener('click', handleCenterButtonClick);
+
+        // Initialize the knob position and value display on load
+        initializeKnob();
+
+    </script>
+</body>
+</html>
