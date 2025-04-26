@@ -1,7 +1,5 @@
 # Interactive Knob Buttons Collection | Free UI Components
 
-![Knob Buttons Banner](images/banner.png)
-
 A comprehensive collection of **free, open-source, customizable knob controls with integrated push buttons** - perfect for web-based audio applications, control panels, IoT interfaces, and more. These components are designed to provide intuitive, tactile user experiences for your web projects.
 
 ## 🎛️ Why This Collection Exists
