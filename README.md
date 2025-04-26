@@ -1,7 +1,5 @@
 # Interactive Knob Buttons Collection | Free UI Components
 
-![Knob Buttons Banner](images/banner.png)
-
 A comprehensive collection of **free, open-source, customizable knob controls with integrated push buttons** - perfect for web-based audio applications, control panels, IoT interfaces, and more. These components are designed to provide intuitive, tactile user experiences for your web projects.
 
 ## 🎛️ Why This Collection Exists
@@ -197,15 +195,15 @@ Contributions are welcome! If you have a new knob design or improvements to exis
 
 ## 💖 Support This Project
 
-If you find this collection useful and want to support continued development of more interactive UI components, consider purchasing a license!
+If you find this collection useful and want to support continued development of more interactive UI components, consider making a donation!
 
 ### Support via PayPal
 
 <div align="center">
   <a href="https://www.paypal.com/ncp/payment/UY552N9XUBCA2" target="_blank">
-    <img src="https://www.paypalobjects.com/en_US/i/btn/btn_buynowCC_LG.gif" alt="Buy Now Button" />
+    <img src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" alt="Donate Button" />
   </a>
-  <p><i>Your purchase includes a commercial license and supports the development of more UI components!</i></p>
+  <p><i>Your donation helps support the development of more free, open-source UI components!</i></p>
   <img src="https://www.paypalobjects.com/images/Debit_Credit_APM.svg" alt="Payment Methods" width="250" />
 </div>
 
@@ -218,15 +216,9 @@ If you find this collection useful and want to support continued development of 
 
 ## 📄 License
 
-This project is available under a dual license:
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-- **Personal/Educational Use**: Free under the MIT License - see the [LICENSE](LICENSE) file for details.
-- **Commercial Use**: For commercial applications, please purchase a commercial license through the "Buy Now" button above.
-
-The commercial license includes:
-- Use in commercial products and applications
-- Priority support
-- No attribution requirement
+You are free to use these components in personal and commercial projects. If you find them valuable, consider supporting the project with a donation!
 
 ## 🙏 Acknowledgments
 
