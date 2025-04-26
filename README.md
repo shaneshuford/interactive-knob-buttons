@@ -1,5 +1,7 @@
 # Interactive Knob Buttons Collection | Free UI Components
 
+![Knob Buttons Banner](images/banner.png)
+
 A comprehensive collection of **free, open-source, customizable knob controls with integrated push buttons** - perfect for web-based audio applications, control panels, IoT interfaces, and more. These components are designed to provide intuitive, tactile user experiences for your web projects.
 
 ## 🎛️ Why This Collection Exists
@@ -200,13 +202,11 @@ If you find this collection useful and want to support continued development of 
 ### Support via PayPal
 
 <div align="center">
-  <style>.pp-UY552N9XUBCA2{text-align:center;border:none;border-radius:0.25rem;min-width:11.625rem;padding:0 2rem;height:2.625rem;font-weight:bold;background-color:#FFD140;color:#000000;font-family:"Helvetica Neue",Arial,sans-serif;font-size:1rem;line-height:1.25rem;cursor:pointer;}</style>
-  <form action="https://www.paypal.com/ncp/payment/UY552N9XUBCA2" method="post" target="_blank" style="display:inline-grid;justify-items:center;align-content:start;gap:0.5rem;">
-    <input class="pp-UY552N9XUBCA2" type="submit" value="Buy Now" />
-    <img src="https://www.paypalobjects.com/images/Debit_Credit_APM.svg" alt="cards" />
-    <section style="font-size: 0.75rem;"> Powered by <img src="https://www.paypalobjects.com/paypal-ui/logos/svg/paypal-wordmark-color.svg" alt="paypal" style="height:0.875rem;vertical-align:middle;"/></section>
-  </form>
+  <a href="https://www.paypal.com/ncp/payment/UY552N9XUBCA2" target="_blank">
+    <img src="https://www.paypalobjects.com/en_US/i/btn/btn_buynowCC_LG.gif" alt="Buy Now Button" />
+  </a>
   <p><i>Your purchase includes a commercial license and supports the development of more UI components!</i></p>
+  <img src="https://www.paypalobjects.com/images/Debit_Credit_APM.svg" alt="Payment Methods" width="250" />
 </div>
 
 ### Other Ways to Support
