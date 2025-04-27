@@ -200,7 +200,7 @@ If you find this collection useful and want to support continued development of 
 ### Support via PayPal
 
 <div align="center">
-  <a href="https://www.paypal.com/ncp/payment/UY552N9XUBCA2" target="_blank">
+  <a href="https://www.paypal.com/donate/?hosted_button_id=T7UTQE9JFEC9Q" target="_blank">
     <img src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" alt="Donate Button" />
   </a>
   <p><i>Your donation helps support the development of more free, open-source UI components!</i></p>
